@@ -40,6 +40,7 @@
 #include "evm.h"
 #include "hera.h"
 #include "eei.h"
+#include "vm.h"
 
 using namespace std;
 using namespace wasm;
@@ -47,13 +48,10 @@ using namespace HeraVM;
 
 struct hera_instance : evm_instance {
   bool fallback = false;
-<<<<<<< HEAD
 #if HERA_EVM2WASM
   bool use_evm2wasm_js = false;
 #endif
-=======
   wasm_vm vm = BINARYEN;
->>>>>>> Add EVM option for WASM VM
 
   hera_instance() : evm_instance({EVM_ABI_VERSION, nullptr, nullptr, nullptr}) {}
 };
@@ -201,7 +199,7 @@ vector<uint8_t> evm2wasm(evm_context* context, vector<uint8_t> const& input) {
   return ret;
 }
 #endif
-
+/*
 void execute(
 	evm_context* context,
 	vector<uint8_t> const& code,
@@ -250,7 +248,7 @@ void execute(
   LiteralList args;
   instance.callExport(main, args);
 }
-
+*/
 void evm_destroy_result(evm_result const* result)
 {
   delete[] result->output_data;
@@ -267,17 +265,14 @@ evm_result evm_execute(
   evm_result ret;
   memset(&ret, 0, sizeof(evm_result));
 
+  hera_instance* hera = static_cast<hera_instance*>(instance);
+
+  vector<uint8_t> _code(code, code + code_size);
+
   try {
     heraAssert(msg->gas >= 0, "Negative startgas?");
-
-    ExecutionResult result;
-    result.gasLeft = (uint64_t)msg->gas;
-
-    vector<uint8_t> _code(code, code + code_size);
-
     // ensure we can only handle WebAssembly version 1
     if (!hasWasmPreamble(_code)) {
-      hera_instance* hera = static_cast<hera_instance*>(instance);
 #if HERA_EVM2WASM
       // Translate EVM bytecode to WASM
       if (hera->use_evm2wasm_js)
@@ -299,18 +294,20 @@ evm_result evm_execute(
       heraAssert(_code.size() > 5, "Invalid contract or metering failed.");
     }
 
-    execute(context, _code, *msg, result);
+    //execute(context, _code, *msg, result);
+    WasmVM vm = WasmVM(hera->vm, _code, *msg, context);
+    vm.execute();
 
     // copy call result
-    if (result.returnValue.size() > 0) {
+    if (vm.output.returnValue.size() > 0) {
       vector<uint8_t> returnValue;
 
-      if (msg->kind == EVM_CREATE && !result.isRevert && hasWasmPreamble(result.returnValue)) {
+      if (msg->kind == EVM_CREATE && !vm.output.isRevert && hasWasmPreamble(vm.output.returnValue)) {
         // Meter the deployed code
-        returnValue = sentinel(context, result.returnValue);
+        returnValue = sentinel(context, vm.output.returnValue);
         heraAssert(returnValue.size() > 5, "Invalid contract or metering failed.");
       } else {
-        returnValue = move(result.returnValue);
+        returnValue = move(vm.output.returnValue);
       }
 
       uint8_t* output_data = new uint8_t[returnValue.size()];
@@ -321,8 +318,8 @@ evm_result evm_execute(
       ret.release = evm_destroy_result;
     }
 
-    ret.status_code = result.isRevert ? EVM_REVERT : EVM_SUCCESS;
-    ret.gas_left = result.gasLeft;
+    ret.status_code = vm.output.isRevert ? EVM_REVERT : EVM_SUCCESS;
+    ret.gas_left = vm.output.gasLeft;
   } catch (OutOfGasException) {
     ret.status_code = EVM_OUT_OF_GAS;
   } catch (InternalErrorException &e) {
@@ -350,7 +347,6 @@ int evm_set_option(
   char const* name,
   char const* value
 ) {
-
   hera_instance* hera = static_cast<hera_instance*>(instance);
 
   if (strcmp(name, "fallback") == 0) {
@@ -366,6 +362,14 @@ int evm_set_option(
   if (strcmp(name, "vm") == 0) {
     if (strcmp(value, "binaryen") == 0)
       hera->vm = BINARYEN;
+#if WABT_SUPPORTED
+    if (strcmp(value, "wabt") == 0)
+      hera->vm = WABT;
+#endif
+#if WAVM_SUPPORTED
+    if (strcmp(value, "wavm") == 0)
+      hera->vm = WAVM;
+#endif
     return 1;
   }
 

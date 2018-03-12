@@ -6,6 +6,7 @@ find_package(Threads REQUIRED)
 add_library(hera
     eei.cpp eei.h
     hera.cpp hera.h
+    vm.cpp vm.h
     ${evm_include_dir}/evm.h
 )
 
