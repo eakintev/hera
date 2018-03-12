@@ -47,9 +47,13 @@ using namespace HeraVM;
 
 struct hera_instance : evm_instance {
   bool fallback = false;
+<<<<<<< HEAD
 #if HERA_EVM2WASM
   bool use_evm2wasm_js = false;
 #endif
+=======
+  wasm_vm vm = BINARYEN;
+>>>>>>> Add EVM option for WASM VM
 
   hera_instance() : evm_instance({EVM_ABI_VERSION, nullptr, nullptr, nullptr}) {}
 };
@@ -346,7 +350,9 @@ int evm_set_option(
   char const* name,
   char const* value
 ) {
+
   hera_instance* hera = static_cast<hera_instance*>(instance);
+
   if (strcmp(name, "fallback") == 0) {
     hera->fallback = strcmp(value, "true") == 0;
     return 1;
@@ -357,6 +363,12 @@ int evm_set_option(
     return 1;
   }
 #endif
+  if (strcmp(name, "vm") == 0) {
+    if (strcmp(value, "binaryen") == 0)
+      hera->vm = BINARYEN;
+    return 1;
+  }
+
   return 0;
 }
 

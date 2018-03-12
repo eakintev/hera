@@ -45,6 +45,14 @@ struct evm_instance;
 HERA_EXPORT
 struct evm_instance* hera_create(void);
 
+typedef enum wasm_vm {
+  BINARYEN = 0
+/*
+  WABT = 1,
+  WAVM = 2
+*/
+} wasm_vm;
+
 #if __cplusplus
 }
 #endif
